@@ -159,7 +159,7 @@ require('torch.FFInterface')
 require('torch.Tester')
 require('torch.TestSuite')
 require('torch.test')
-
+require('torch.aliasMultinomial')
 function torch.totable(obj)
    if torch.isTensor(obj) or torch.isStorage(obj) then
       return obj:totable()

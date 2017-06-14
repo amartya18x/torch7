@@ -70,6 +70,107 @@ void THTensor_(logNormal)(THTensor *self, THGenerator *_generator, double mean, 
   TH_TENSOR_APPLY(real, self, *self_data = (real)THRandom_logNormal(_generator, mean, stdv););
 }
 
+
+void THTensor_(alias_multinomial_setup)(THTensor *probs, THLongTensor *J, THTensor *q)
+{
+  long inputsize = THTensor_(nElement)(probs);
+  long i = 0;
+  THLongTensor *smaller = THLongTensor_newWithSize1d(inputsize);
+  THLongTensor *larger = THLongTensor_newWithSize1d(inputsize);
+  long small_c = 0;
+  long large_c = 0;
+  THLongTensor_resize1d(J, inputsize);
+  THTensor_(resize1d)(q, inputsize);
+  for(i = 0; i < inputsize; i++)
+    {
+      J->storage->data[i] = 0L;
+      real val = probs->storage->data[i];
+      q->storage->data[i] = inputsize * val;
+      if (inputsize * val < 1.0)
+        {
+        smaller->storage->data[small_c] = i;
+        small_c += 1;
+        }
+      else
+        {
+          larger->storage->data[large_c] = i;
+          large_c += 1;
+        }
+    }
+  long large, small;
+  while(small_c > 0 && large_c > 0)
+    {
+      large = larger->storage->data[large_c-1];
+      small = smaller->storage->data[small_c-1];
+      J->storage->data[small] = large+1L;
+      q->storage->data[large] -= (1.0 - q->storage->data[small]);
+
+      if(q->storage->data[large] < 1.0)
+        {
+          smaller->storage->data[small_c-1]=large;
+          large_c -= 1;
+        }
+      else
+        {
+          larger->storage->data[large_c-1]=large;
+          small_c -= 1;
+        }
+    }
+
+  real q_min = q->storage->data[inputsize-1];
+  real q_max = q->storage->data[inputsize-1];
+  
+      for(i=0; i < inputsize; i++)
+        {
+          if(q->storage->data[i] < q_min)
+            q_min = q->storage->data[i];
+          
+          if(q->storage->data[i] > q_max)
+            q_max = q->storage->data[i];
+        }
+      
+  if(q_min < 0)
+    {
+      printf("ERROR q_min is less than 0");
+    }
+  
+  if(q_max > 1)
+    {
+      for(i=0; i < inputsize; i++)
+        {
+          q->storage->data[i] /= q_max;
+        }
+    }
+  for(i=0; i<inputsize; i++)
+    {
+      if(J->storage->data[i] <= 0)
+        q->storage->data[i] = 1.0;
+    }
+  THLongTensor_free(smaller);
+  THLongTensor_free(larger);
+}
+void THTensor_(alias_multinomial_batchdraw)(THLongTensor *self, THGenerator *_generator, THLongTensor *J, THTensor *q)
+{
+  long K = THLongTensor_nElement(J);
+  long output_nelem = THLongTensor_nElement(self);
+  THGenerator* gen = THGenerator_new();
+  
+  int i = 0;
+  int _mask;
+  real _q;
+  long rand_ind;
+  for(i=0; i< output_nelem; i++)
+    {
+      rand_ind = (long)THRandom_uniform(gen, 0, K) ;
+      _q = q->storage->data[rand_ind];
+      _mask = THRandom_bernoulli(gen, _q);
+      long sample_idx = J->storage->data[rand_ind]*(1 - _mask) + \
+        (rand_ind+1L) * _mask;
+      THLongStorage_set(self->storage,
+                        self->storageOffset+i*self->stride[0],
+                        sample_idx-1L);
+    }
+}
 void THTensor_(multinomial)(THLongTensor *self, THGenerator *_generator, THTensor *prob_dist, int n_sample, int with_replacement)
 {
   int start_dim = THTensor_(nDimension)(prob_dist);
