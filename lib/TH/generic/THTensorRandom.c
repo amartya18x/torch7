@@ -88,12 +88,16 @@ void THTensor_(alias_multinomial_setup)(THTensor *probs, THLongTensor *J, THTens
       q->storage->data[i] = inputsize * val;
       if (inputsize * val < 1.0)
         {
-        smaller->storage->data[small_c] = i;
-        small_c += 1;
+          THLongStorage_set(smaller->storage,
+                            smaller->storageOffset+small_c*smaller->stride[0],
+                            i);
+          small_c += 1;
         }
       else
         {
-          larger->storage->data[large_c] = i;
+          THLongStorage_set(larger->storage,
+                            larger->storageOffset+large_c*larger->stride[0],
+                            i);
           large_c += 1;
         }
     }
@@ -107,38 +111,40 @@ void THTensor_(alias_multinomial_setup)(THTensor *probs, THLongTensor *J, THTens
 
       if(q->storage->data[large] < 1.0)
         {
-          smaller->storage->data[small_c-1]=large;
+          THLongStorage_set(smaller->storage,
+                            smaller->storageOffset+(small_c-1)*smaller->stride[0],
+                            large);
           large_c -= 1;
         }
       else
         {
-          larger->storage->data[large_c-1]=large;
+          THLongStorage_set(larger->storage,
+                            larger->storageOffset+(large_c-1)*larger->stride[0],
+                            large);
           small_c -= 1;
         }
     }
 
-  real q_min = q->storage->data[inputsize-1];
-  real q_max = q->storage->data[inputsize-1];
-  
-      for(i=0; i < inputsize; i++)
-        {
-          if(q->storage->data[i] < q_min)
-            q_min = q->storage->data[i];
-          
-          if(q->storage->data[i] > q_max)
-            q_max = q->storage->data[i];
-        }
-      
-  if(q_min < 0)
+  real q_min = THStorage_(get)(q->storage,q->storageOffset+(inputsize-1)*q->stride[0]);
+  real q_max = q_min;
+  real q_temp;
+  for(i=0; i < inputsize; i++)
     {
-      printf("ERROR q_min is less than 0");
+      q_temp = THStorage_(get)(q->storage,q->storageOffset+i*q->stride[0]);
+      if(q_temp < q_min)
+        q_min = q_temp;
+      else if(q_temp > q_max)
+        q_max = q_temp;
     }
+  THArgCheckWithCleanup((q_min > 0),
+                        THCleanup(THLongTensor_free(smaller); THLongTensor_free(larger);), 2,
+                        "q_min is less than 0");
   
   if(q_max > 1)
     {
       for(i=0; i < inputsize; i++)
         {
-          q->storage->data[i] /= q_max;
+          THTensor_(data)(q)[i*q->stride[0]] /= q_max;
         }
     }
   for(i=0; i<inputsize; i++)
@@ -151,21 +157,30 @@ void THTensor_(alias_multinomial_setup)(THTensor *probs, THLongTensor *J, THTens
 }
 void THTensor_(alias_multinomial_batchdraw)(THLongTensor *self, THGenerator *_generator, THLongTensor *J, THTensor *q)
 {
+  
+  THArgCheck(THLongTensor_isContiguous(self),
+             1, "Output tensor needs to be contiguous");
+
   long K = THLongTensor_nElement(J);
   long output_nelem = THLongTensor_nElement(self);
   THGenerator* gen = THGenerator_new();
   
-  int i = 0;
-  int _mask;
+  int i = 0, _mask=0;
   real _q;
-  long rand_ind;
+  long rand_ind, sample_idx, J_sample, kk_sample;
   for(i=0; i< output_nelem; i++)
     {
       rand_ind = (long)THRandom_uniform(gen, 0, K) ;
-      _q = q->storage->data[rand_ind];
+      _q = THStorage_(get)(q->storage,
+                           q->storageOffset+rand_ind*q->stride[0]);
+
       _mask = THRandom_bernoulli(gen, _q);
-      long sample_idx = J->storage->data[rand_ind]*(1 - _mask) + \
-        (rand_ind+1L) * _mask;
+      
+      J_sample = THLongStorage_get(J->storage,
+                                   J->storageOffset+rand_ind*J->stride[0]);
+
+      sample_idx = J_sample*(1 -_mask) + (rand_ind+1L) * _mask;
+
       THLongStorage_set(self->storage,
                         self->storageOffset+i*self->stride[0],
                         sample_idx-1L);
