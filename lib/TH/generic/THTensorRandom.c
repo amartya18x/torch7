@@ -111,6 +111,10 @@ void THTensor_(alias_multinomial_setup)(THTensor *probs, THLongTensor *J, THTens
           large_c += 1;
         }
     }
+
+  // Loop through and create little binary mixtures that
+  // appropriately allocate the larger outcomes over the
+  // overall uniform mixture.
   long large, small;
   while(small_c > 0 && large_c > 0)
     {
@@ -166,6 +170,8 @@ void THTensor_(alias_multinomial_setup)(THTensor *probs, THLongTensor *J, THTens
     }
   for(i=0; i<inputsize; i++)
     {
+      // sometimes an large index isn't added to J. 
+      // fix it by making the probability 1 so that J isn't indexed.
       if(J->storage->data[i] <= 0)
         q->storage->data[i] = 1.0;
     }

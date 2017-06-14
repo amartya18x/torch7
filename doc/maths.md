@@ -255,6 +255,36 @@ p.multinomial(res, p, n, replacement) -- p.multinomial instead of torch.multinom
 
 This is due to the fact that the result here is of a `LongTensor` type, and we do not define a `torch.multinomial` over long `Tensor`s.
 
+<a name="torch.AliasMultinomial()"
+### [res] torch.AliasMultinomial(probs)###
+
+`AM = torch.AliasMultinomial(probs)` returns an `AliasMultinomial` object which contains two `Tensors` , `J` and`k`. This is required once for each `probs` vectors. We can then sample from this distribution multiple times.
+
+`AM:batchdraw(output)` returns `output` filled with indices drawn from the multinomial distribution `probs`. `output` itself is filled with the indices and it is not necessary to get the return value of the statement.
+
+The sampling is done through a technique defined in a very simple way in this blog about [The Alias Method](https://hips.seas.harvard.edu/blog/2013/03/03/the-alias-method-efficient-sampling-with-many-discrete-outcomes/). The paper that describes this technique is present [here](http://www.tandfonline.com/doi/abs/10.1080/00031305.1979.10482697). The `output` `Tensor` that is fed into the `batchdraw` method need not be contiguous and it can have any shape. The shape of the `Tensor` after the execution of the function will not change and it will be filled with sampled indices.
+
+```lua
+probs = torch.Tensor({0.2, 0.2, 0.5, 0.1})
+AM = torch.AliasMultinomial(probs)
+
+output = torch.LongTensor(4,6)
+
+AM:batchdraw(output)
+ 1  2  2  4  2  2
+ 2  2  3  2  3  2
+ 1  3  4  3  3  3
+ 1  3  3  1  3  3
+[torch.LongTensor of size 4x6]
+
+print(output)
+ 1  2  2  4  2  2
+ 2  2  3  2  3  2
+ 1  3  4  3  3  3
+ 1  3  3  1  3  3
+[torch.LongTensor of size 4x6]
+```
+
 <a name="torch.ones"></a>
 ### [res] torch.ones([res,] m [,n...]) ###
 <a name="torch.ones"></a>
