@@ -255,8 +255,9 @@ p.multinomial(res, p, n, replacement) -- p.multinomial instead of torch.multinom
 
 This is due to the fact that the result here is of a `LongTensor` type, and we do not define a `torch.multinomial` over long `Tensor`s.
 
-<a name="torch.AliasMultinomial()"
+<a name="torch.AliasMultinomial()"></a>
 ### [res] torch.AliasMultinomial(probs)###
+<a name="torch.AliasMultinomial()"></a>
 
 `AM = torch.AliasMultinomial(probs)` returns an `AliasMultinomial` object which contains two `Tensors` , `J` and`k`. This is required once for each `probs` vectors. We can then sample from this distribution multiple times.
 
