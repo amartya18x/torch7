@@ -257,7 +257,6 @@ This is due to the fact that the result here is of a `LongTensor` type, and we d
 
 <a name="torch.AliasMultinomial()"></a>
 ### [res] torch.AliasMultinomial(probs) ###
-<a name="torch.AliasMultinomial()"></a>
 
 `AM = torch.AliasMultinomial(probs)` returns an `AliasMultinomial` object which contains two `Tensors` , `J` and`k`. This is required once for each `probs` vectors. We can then sample from this distribution multiple times.
 
