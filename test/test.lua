@@ -1811,6 +1811,27 @@ function torchtest.multinomialwithoutreplacement()
       end
    end
 end
+function torchtest.aliasMultinomial()
+   local n_class = 10
+   local t=os.time()
+   torch.manualSeed(t)
+   local probs = torch.Tensor(n_class):uniform(0,1)
+   probs:div(probs:sum())
+   local a = torch.Timer()
+   local AM = torch.AliasMultinomial(probs)
+   a:reset()
+   
+   local output = torch.LongTensor(100, 100)
+   local n_samples = output:nElement()
+   output = AM:batchdraw(output)
+   mytester:assert(output:nElement() == n_samples, "wrong number of samples")
+   local counts = torch.Tensor(n_class):zero()
+   toast_output:apply(function(x)
+         counts[x] = counts[x] + 1
+   end)
+   counts:div(counts:sum())
+   tester:eq(probs, counts, 0.001, "probs and counts should be approximately equal")
+end
 function torchtest.multinomialvector()
    local n_col = 4
    local t=os.time()

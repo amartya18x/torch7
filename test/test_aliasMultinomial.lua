@@ -7,7 +7,7 @@ local function aliasMultinomial()
    local probs = torch.Tensor(n_class):uniform(0,1)
    probs:div(probs:sum())
    local a = torch.Timer()
-   local toast = torch.aliasMultinomial(probs)
+   local toast = torch.AliasMultinomial(probs)
    print("AliasMultinomial setup in "..a:time().real.." seconds")
    a:reset()
    
