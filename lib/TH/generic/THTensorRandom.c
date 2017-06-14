@@ -70,6 +70,141 @@ void THTensor_(logNormal)(THTensor *self, THGenerator *_generator, double mean, 
   TH_TENSOR_APPLY(real, self, *self_data = (real)THRandom_logNormal(_generator, mean, stdv););
 }
 
+
+void THTensor_(alias_multinomial_setup)(THTensor *probs, THLongTensor *J, THTensor *q)
+{
+  long inputsize = THTensor_(nElement)(probs);
+  long i = 0;
+  THLongTensor *smaller = THLongTensor_newWithSize1d(inputsize);
+  THLongTensor *larger = THLongTensor_newWithSize1d(inputsize);
+  long small_c = 0;
+  long large_c = 0;
+  THLongTensor_resize1d(J, inputsize);
+  THTensor_(resize1d)(q, inputsize);
+  
+  for(i = 0; i < inputsize; i++)
+    {
+      THLongStorage_set(J->storage,
+                        J->storageOffset+i*J->stride[0],
+                        0L);
+      
+      real val = THStorage_(get)(probs->storage,
+                                 probs->storageOffset+i*probs->stride[0]);
+
+      THStorage_(set)(q->storage,
+                      q->storageOffset+i*q->stride[0],
+                      inputsize*val);
+
+      
+      if (inputsize * val < 1.0)
+        {
+          THLongStorage_set(smaller->storage,
+                            smaller->storageOffset+small_c*smaller->stride[0],
+                            i);
+          small_c += 1;
+        }
+      else
+        {
+          THLongStorage_set(larger->storage,
+                            larger->storageOffset+large_c*larger->stride[0],
+                            i);
+          large_c += 1;
+        }
+    }
+
+  // Loop through and create little binary mixtures that
+  // appropriately allocate the larger outcomes over the
+  // overall uniform mixture.
+  long large, small;
+  while(small_c > 0 && large_c > 0)
+    {
+      large = THLongStorage_get(larger->storage,
+                                larger->storageOffset+(large_c-1)*larger->stride[0]);
+      small = THLongStorage_get(smaller->storage,
+                                smaller->storageOffset+(small_c-1)*smaller->stride[0]);
+      
+      THLongStorage_set(J->storage,
+                        J->storageOffset+small*J->stride[0],
+                        large+1L);
+      
+      THTensor_(data)(q)[large*q->stride[0]] -= 1.0 -                   \
+        THStorage_(get)(q->storage,q->storageOffset+small*q->stride[0]);
+      
+      if(q->storage->data[large] < 1.0)
+        {
+          THLongStorage_set(smaller->storage,
+                            smaller->storageOffset+(small_c-1)*smaller->stride[0],
+                            large);
+          large_c -= 1;
+        }
+      else
+        {
+          THLongStorage_set(larger->storage,
+                            larger->storageOffset+(large_c-1)*larger->stride[0],
+                            large);
+          small_c -= 1;
+        }
+    }
+
+  real q_min = THStorage_(get)(q->storage,q->storageOffset+(inputsize-1)*q->stride[0]);
+  real q_max = q_min;
+  real q_temp;
+  for(i=0; i < inputsize; i++)
+    {
+      q_temp = THStorage_(get)(q->storage,q->storageOffset+i*q->stride[0]);
+      if(q_temp < q_min)
+        q_min = q_temp;
+      else if(q_temp > q_max)
+        q_max = q_temp;
+    }
+  THArgCheckWithCleanup((q_min > 0),
+                        THCleanup(THLongTensor_free(smaller); THLongTensor_free(larger);), 2,
+                        "q_min is less than 0");
+  
+  if(q_max > 1)
+    {
+      for(i=0; i < inputsize; i++)
+        {
+          THTensor_(data)(q)[i*q->stride[0]] /= q_max;
+        }
+    }
+  for(i=0; i<inputsize; i++)
+    {
+      // sometimes an large index isn't added to J. 
+      // fix it by making the probability 1 so that J isn't indexed.
+      if(J->storage->data[i] <= 0)
+        q->storage->data[i] = 1.0;
+    }
+  THLongTensor_free(smaller);
+  THLongTensor_free(larger);
+}
+void THTensor_(alias_multinomial_batchdraw)(THLongTensor *self, THGenerator *_generator, THLongTensor *J, THTensor *q)
+{
+  long K = THLongTensor_nElement(J);
+  long output_nelem = THLongTensor_nElement(self);
+  THGenerator* gen = THGenerator_new();
+  
+  int i = 0, _mask=0;
+  real _q;
+  long rand_ind, sample_idx, J_sample, kk_sample;
+  for(i=0; i< output_nelem; i++)
+    {
+      rand_ind = (long)THRandom_uniform(gen, 0, K) ;
+      _q = THStorage_(get)(q->storage,
+                           q->storageOffset+rand_ind*q->stride[0]);
+
+      _mask = THRandom_bernoulli(gen, _q);
+      
+      J_sample = THLongStorage_get(J->storage,
+                                   J->storageOffset+rand_ind*J->stride[0]);
+
+      sample_idx = J_sample*(1 -_mask) + (rand_ind+1L) * _mask;
+
+      THLongStorage_set(self->storage,
+                        self->storageOffset+i*self->stride[0],
+                        sample_idx-1L);
+    }
+}
 void THTensor_(multinomial)(THLongTensor *self, THGenerator *_generator, THTensor *prob_dist, int n_sample, int with_replacement)
 {
   int start_dim = THTensor_(nDimension)(prob_dist);
