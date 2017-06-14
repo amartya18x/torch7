@@ -263,7 +263,9 @@ This is due to the fact that the result here is of a `LongTensor` type, and we d
 
 `AM:batchdraw(output)` returns `output` filled with indices drawn from the multinomial distribution `probs`. `output` itself is filled with the indices and it is not necessary to get the return value of the statement.
 
-The sampling is done through a technique defined in a very simple way in this blog about [The Alias Method](https://hips.seas.harvard.edu/blog/2013/03/03/the-alias-method-efficient-sampling-with-many-discrete-outcomes/). The paper that describes this technique is present [here](http://www.tandfonline.com/doi/abs/10.1080/00031305.1979.10482697). The `output` `Tensor` that is fed into the `batchdraw` method need not be contiguous and it can have any shape. The shape of the `Tensor` after the execution of the function will not change and it will be filled with sampled indices.
+The sampling is done through a technique defined in a very simple way in this blog about [The Alias Method](https://hips.seas.harvard.edu/blog/2013/03/03/the-alias-method-efficient-sampling-with-many-discrete-outcomes/). The paper that describes this technique is present [here](http://www.tandfonline.com/doi/abs/10.1080/00031305.1979.10482697). This can only sample with replacement.
+
+The `output` `Tensor` that is fed into the `batchdraw` method need not be contiguous and it can have any shape. The shape of the `Tensor` after the execution of the function will not change and it will be filled with sampled indices. This method is exceptionally faster than `torch.multinomial` when you want to sample a lot of samples from the same distrbution a large number of times. `torch.multinomial` is faster for sampling few samples from a distribution once. To see and compare how these two methods differ in speed run `th test/test_aliasMultinomial.lua`.
 
 ```lua
 probs = torch.Tensor({0.2, 0.2, 0.5, 0.1})
