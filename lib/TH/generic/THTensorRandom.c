@@ -81,11 +81,21 @@ void THTensor_(alias_multinomial_setup)(THTensor *probs, THLongTensor *J, THTens
   long large_c = 0;
   THLongTensor_resize1d(J, inputsize);
   THTensor_(resize1d)(q, inputsize);
+  
   for(i = 0; i < inputsize; i++)
     {
-      J->storage->data[i] = 0L;
-      real val = probs->storage->data[i];
-      q->storage->data[i] = inputsize * val;
+      THLongStorage_set(J->storage,
+                        J->storageOffset+i*J->stride[0],
+                        0L);
+      
+      real val = THStorage_(get)(probs->storage,
+                                 probs->storageOffset+i*probs->stride[0]);
+
+      THStorage_(set)(q->storage,
+                      q->storageOffset+i*q->stride[0],
+                      inputsize*val);
+
+      
       if (inputsize * val < 1.0)
         {
           THLongStorage_set(smaller->storage,
@@ -104,11 +114,18 @@ void THTensor_(alias_multinomial_setup)(THTensor *probs, THLongTensor *J, THTens
   long large, small;
   while(small_c > 0 && large_c > 0)
     {
-      large = larger->storage->data[large_c-1];
-      small = smaller->storage->data[small_c-1];
-      J->storage->data[small] = large+1L;
-      q->storage->data[large] -= (1.0 - q->storage->data[small]);
-
+      large = THLongStorage_get(larger->storage,
+                                larger->storageOffset+(large_c-1)*larger->stride[0]);
+      small = THLongStorage_get(smaller->storage,
+                                smaller->storageOffset+(small_c-1)*smaller->stride[0]);
+      
+      THLongStorage_set(J->storage,
+                        J->storageOffset+small*J->stride[0],
+                        large+1L);
+      
+      THTensor_(data)(q)[large*q->stride[0]] -= 1.0 -                   \
+        THStorage_(get)(q->storage,q->storageOffset+small*q->stride[0]);
+      
       if(q->storage->data[large] < 1.0)
         {
           THLongStorage_set(smaller->storage,
@@ -157,10 +174,6 @@ void THTensor_(alias_multinomial_setup)(THTensor *probs, THLongTensor *J, THTens
 }
 void THTensor_(alias_multinomial_batchdraw)(THLongTensor *self, THGenerator *_generator, THLongTensor *J, THTensor *q)
 {
-  
-  THArgCheck(THLongTensor_isContiguous(self),
-             1, "Output tensor needs to be contiguous");
-
   long K = THLongTensor_nElement(J);
   long output_nelem = THLongTensor_nElement(self);
   THGenerator* gen = THGenerator_new();
